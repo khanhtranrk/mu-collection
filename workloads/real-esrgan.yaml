@@ -1,0 +1,79 @@
+routines:
+  install_real_esrgan:
+    actions:
+      - type: execute_command
+        target: uv
+        args:
+          - venv
+          - "${{ sys.cache_dir }}/real_esrgan_env"
+          - --python
+          - "3.10"
+
+      - type: execute_command
+        target: git
+        args:
+          - clone
+          - --depth
+          - "1"
+          - https://github.com/xinntao/Real-ESRGAN.git
+          - "${{ sys.cache_dir }}/Real-ESRGAN"
+
+      - type: execute_command
+        target: uv
+        args:
+          - pip
+          - install
+          - --python
+          - "${{ sys.cache_dir }}/real_esrgan_env/bin/python"
+          - -e
+          - "${{ sys.cache_dir }}/Real-ESRGAN"
+          - facexlib
+          - gfpgan
+
+      # Compatibility patch for newer torchvision
+      - type: execute_command
+        target: sh
+        args:
+          - -c
+          - >-
+            grep -rl 'torchvision.transforms.functional_tensor'
+            '${{ sys.cache_dir }}/real_esrgan_env/lib/python3.10/site-packages/basicsr'
+            | xargs -r sed -i
+            's/torchvision.transforms.functional_tensor/torchvision.transforms.functional/g'
+
+      - type: execute_command
+        target: touch
+        args:
+          - "${{ sys.cache_dir }}/real_esrgan_env/.installed"
+
+prepare:
+  - type: execute_routine
+    routine: install_real_esrgan
+    skip_if:
+      operator: file_exists
+      path: "${{ sys.cache_dir }}/real_esrgan_env/.installed"
+
+workload:
+  target: "${{ sys.cache_dir }}/real_esrgan_env/bin/python"
+  units: 1
+  inputs:
+    input:
+      type: string
+      value: "${{ with.input }}"
+    output:
+      type: string
+      value: "${{ with.output }}"
+    outscale:
+      type: number
+      value: "${{ with.outscale }}"
+      default: 4.0
+  argv:
+    - "${{ sys.cache_dir }}/Real-ESRGAN/inference_realesrgan.py"
+    - -n
+    - RealESRGAN_x4plus
+    - -i
+    - "${{ inputs.input }}"
+    - -o
+    - "${{ inputs.output }}"
+    - -s
+    - "${{ inputs.outscale }}"
